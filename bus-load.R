@@ -30,4 +30,4 @@ plot.arrivals.3 <- ggplot(bus.data) +
   aes(x=departure, y=dropDate2(datetime.arrival)) +
   geom_boxplot(outlier.color = NA, fill=NA) + geom_jitter(width=0.3)
 
-ggsave("plot-durations.png", plot=plot.durations, units="in", height=8.5, width=4)
+ggsave("plot-durations.png", plot=plot.durations, units="in", height=8.5, width=6)
