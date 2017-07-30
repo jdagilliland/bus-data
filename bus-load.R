@@ -1,6 +1,7 @@
 library(data.table)
 library(ggplot2)
 library(lubridate)
+library(scales)
 
 bus.data <- fread("~/tmp/bus-data.csv", colClasses = c("character","character","character"))
 setnames(bus.data, c("V1", "V2", "V3"), c("date", "departure", "arrival"))
@@ -29,5 +30,11 @@ plot.arrivals.2 <- ggplot(bus.data) +
 plot.arrivals.3 <- ggplot(bus.data) +
   aes(x=departure, y=dropDate2(datetime.arrival)) +
   geom_boxplot(outlier.color = NA, fill=NA) + geom_jitter(width=0.3)
+
+plot.arrivals.1.inbound <- ggplot(bus.data[departure %in%
+                                  c("05:40", "06:20", "06:40", "07:20",
+                                    "08:00", "09:00", "10:30")]) +
+    aes(x=departure, y=as.Date(hm(arrival), origin=lubridate::origin)) +
+    geom_boxplot(outlier.color = NA, fill=NA) + geom_jitter(width=0.3)
 
 ggsave("plot-durations.png", plot=plot.durations, units="in", height=8.5, width=6)
