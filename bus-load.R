@@ -8,6 +8,8 @@ setnames(bus.data, c("V1", "V2", "V3"), c("date", "departure", "arrival"))
 bus.data[, departure:=paste(substr(departure, 1, 2), substr(departure,3,4), sep=":")]
 bus.data[, arrival:=paste(substr(arrival, 1, 2), substr(arrival,3,4), sep=":")]
 bus.data[, datetime.departure:=ymd_hm(paste(date, departure, sep="_"))]
+# bus.data[, time.departure:=hm(departure)]
+# bus.data[, time.arrival:=hm(arrival)]
 bus.data[, datetime.arrival:=ymd_hm(paste(date, arrival, sep="_"))]
 bus.data[, duration:=datetime.arrival - datetime.departure]
 
