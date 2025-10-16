@@ -16,10 +16,13 @@ bus.data <- rbind(bus.data.nashua, bus.data.nlondonderry)
 bus.data[, departure:=paste(substr(departure, 1, 2), substr(departure,3,4), sep=":")]
 bus.data[, arrival:=paste(substr(arrival, 1, 2), substr(arrival,3,4), sep=":")]
 bus.data[, datetime.departure:=ymd_hm(paste(date, departure, sep="_"))]
-# bus.data[, time.departure:=hm(departure)]
-# bus.data[, time.arrival:=hm(arrival)]
+bus.data[, time.departure:=hms::parse_hm(departure)]
+bus.data[, time.arrival:=hms::parse_hm(arrival)]
 bus.data[, datetime.arrival:=ymd_hm(paste(date, arrival, sep="_"))]
 bus.data[, duration:=datetime.arrival - datetime.departure]
+fwrite(bus.data, "bus-data.csv")
+
+# From here on only plots.
 
 dropDate <- function(x) {
     3600 * hour(x) + 60 * minute(x) + second(x)
@@ -27,8 +30,6 @@ dropDate <- function(x) {
 dropDate2 <- function(x) {
   as.numeric(x - as.Date(x))
 }
-
-# From here on only plots.
 
 plot.durations <- ggplot(bus.data) + aes(x=departure, y=duration) +
     geom_boxplot(outlier.color = NA, fill=NA) + geom_jitter(width=0.3)
