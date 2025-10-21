@@ -13,6 +13,10 @@ let
   myRStudio = pkgs.rstudioWrapper.override { packages = rPacks; };
   myPy = pkgs.python312.withPackages (pykgs: with pykgs; [
     numpyro
+    pandas
+    seaborn
+    matplotlib
+    jax
   ]);
 in with pkgs; {
   busData = stdenv.mkDerivation {
