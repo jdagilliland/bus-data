@@ -17,6 +17,8 @@ let
     seaborn
     matplotlib
     jax
+    ipython
+    jupyterlab
   ]);
 in with pkgs; {
   busData = stdenv.mkDerivation {
