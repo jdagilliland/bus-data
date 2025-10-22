@@ -12,6 +12,15 @@ from numpyro.infer import MCMC, NUTS
 
 dset = pd.read_csv("bus-data.csv")
 
+def simple_model(station, departure, duration):
+    stations = station.unique()
+    departures = departure.unique()
+    bus = [(stat, dep) for stat in stations for dep in departures]
+    with numpyro.plate("bus", len(bus)):
+        mu = numpyro.sample("mu", dist.Normal(90, 90))
+    sigma = numpyro.sample("sigma", dist.HalfNormal(40))
+    numpyro.sample("obs", dist.Normal(mu, sigma), obs=duration)
+
 def model(station, departure, duration):
     region_base = numpyro.sample("region_base", dist.Normal(50, 20))
     hwy_sigma = numpyro.sample("hwy_sigma", dist.HalfNormal(20))
