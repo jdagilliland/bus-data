@@ -17,6 +17,8 @@ let
     seaborn
     matplotlib
     jax
+    scikitlearn
+    # Dev tools
     ipython
     jupyterlab
   ]);
