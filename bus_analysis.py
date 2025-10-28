@@ -20,18 +20,20 @@ def simple_model(bus, duration=None):
     sigma = numpyro.sample("sigma", dist.HalfNormal(40))
     numpyro.sample("obs", dist.Normal(mu[bus], sigma), obs=duration)
 
-def model(station, departure, duration):
+def model(station, departure, duration=None):
     region_base = numpyro.sample("region_base", dist.Normal(50, 20))
     hwy_sigma = numpyro.sample("hwy_sigma", dist.HalfNormal(20))
     am_rush_hour_start = numpyro.sample("am_rush_hour_start", dist.Uniform(0, 34800))
-    am_rush_hour_length = numpyro.sample("am_rush_hour_end", dist.HalfNormal(7200))
+    am_rush_hour_length = numpyro.sample("am_rush_hour_length", dist.HalfNormal(7200))
+    am_rush_hour_end = am_rush_hour_start + am_rush_hour_length
     am_rush_hour_onset = numpyro.sample("am_rush_hour_onset",
                                              dist.HalfNormal(1.0/2e3))
     am_rush_hour_fade = numpyro.sample("am_rush_hour_fade",
                                              dist.HalfNormal(1.0/2e3))
     pm_rush_hour_start = numpyro.sample("pm_rush_hour_start",
                                         dist.Uniform(55800, 64800))
-    pm_rush_hour_length = numpyro.sample("pm_rush_hour_end", dist.HalfNormal(7200))
+    pm_rush_hour_length = numpyro.sample("pm_rush_hour_length", dist.HalfNormal(7200))
+    pm_rush_hour_end = pm_rush_hour_start + pm_rush_hour_length
     pm_rush_hour_onset = numpyro.sample("pm_rush_hour_onset",
                                              dist.HalfNormal(1.0/2e3))
     pm_rush_hour_fade = numpyro.sample("pm_rush_hour_fade",
@@ -59,20 +61,10 @@ def model(station, departure, duration):
           + pm_rush * pm_rush_penalty)
     numpyro.sample("obs", dist.Normal(mu, sigma), obs=duration)
 
-def data_prep_simple_model(dset):
-    bus_labels = dset["departure"].str.cat(dset["station"], sep="_")
-    bus_labels.shape
+def fit_simple_model(bus_dset, rng_key_):
+    bus_labels = bus_dset["departure"].str.cat(bus_dset["station"], sep="_")
     buses_le = LabelEncoder()
     buses_ix = buses_le.fit_transform(bus_labels)
-    return buses_ix
-
-def main():
-    # Data setup
-    bus_dset = pd.read_csv("bus-data.csv")
-    buses_ix = data_prep_simple_model(bus_dset)
-     # Start from this source of randomness. We will split keys for subsequent operations.
-    rng_key = random.PRNGKey(0)
-    rng_key, rng_key_ = random.split(rng_key)
 
     # Run NUTS.
     kernel = NUTS(simple_model)
@@ -83,9 +75,43 @@ def main():
         bus=buses_ix,
         duration=bus_dset.duration.values,
     )
-    mcmc.print_summary()
-    samples_1 = mcmc.get_samples()
+    # mcmc.print_summary()
+    # samples_1 = mcmc.get_samples()
     return mcmc
+
+def fit_rush_hour_model(bus_dset, rng_key_):
+    station_labels = bus_dset["station"]
+    station_le = LabelEncoder()
+    stations_ix = station_le.fit_transform(station_labels)
+
+    # Run NUTS.
+    kernel = NUTS(model)
+    num_samples = 2000
+    mcmc = MCMC(kernel, num_warmup=1000, num_samples=num_samples)
+    mcmc.run(
+        rng_key_,
+        station=stations_ix,
+        departure=bus_dset['time.departure'].values,
+        duration=bus_dset.duration.values,
+    )
+    # mcmc.print_summary()
+    # samples_1 = mcmc.get_samples()
+    return mcmc
+
+def main():
+    # Data setup
+    bus_dset = pd.read_csv("bus-data.csv")
+     # Start from this source of randomness. We will split keys for subsequent operations.
+    rng_key = random.PRNGKey(0)
+    rng_key, rng_key_ = random.split(rng_key)
+
+    # mcmc_simple = fit_simple_model(bus_dset, rng_key_)
+
+    rng_key, rng_key_ = random.split(rng_key)
+
+    mcmc_rush_hour = fit_rush_hour_model(bus_dset, rng_key_)
+
+    return mcmc_simple, mcmc_rush_hour
 
 if __name__ == "__main__":
     mcmc = main()
