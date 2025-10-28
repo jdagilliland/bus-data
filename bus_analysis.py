@@ -9,6 +9,7 @@ from numpyro import handlers
 from numpyro.diagnostics import hpdi
 import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS
+# from numpyro.contrib.nested_sampling import NestedSampler
 from sklearn.preprocessing import LabelEncoder
 import numpy as np
 
@@ -22,22 +23,24 @@ def simple_model(bus, duration=None):
 
 def model(station, departure, duration=None):
     region_base = numpyro.sample("region_base", dist.Normal(50, 20))
-    hwy_sigma = numpyro.sample("hwy_sigma", dist.HalfNormal(20))
-    am_rush_hour_start = numpyro.sample("am_rush_hour_start", dist.Uniform(0, 34800))
-    am_rush_hour_length = numpyro.sample("am_rush_hour_length", dist.HalfNormal(7200))
+    hwy_sigma = numpyro.sample("hwy_sigma", dist.Exponential(1.0/20))
+    am_rush_hour_start = numpyro.sample("am_rush_hour_start", dist.Normal(17e3, 5e3))
+    am_rush_hour_length = numpyro.sample("am_rush_hour_length",
+                                         dist.Exponential(1.0/7200))
     am_rush_hour_end = am_rush_hour_start + am_rush_hour_length
     am_rush_hour_onset = numpyro.sample("am_rush_hour_onset",
-                                             dist.HalfNormal(1.0/2e3))
+                                             dist.Exponential(1.0/2e3))
     am_rush_hour_fade = numpyro.sample("am_rush_hour_fade",
-                                             dist.HalfNormal(1.0/2e3))
+                                             dist.Exponential(1.0/2e3))
     pm_rush_hour_start = numpyro.sample("pm_rush_hour_start",
-                                        dist.Uniform(55800, 64800))
-    pm_rush_hour_length = numpyro.sample("pm_rush_hour_length", dist.HalfNormal(7200))
+                                        dist.Uniform(60e3, 5e3))
+    pm_rush_hour_length = numpyro.sample("pm_rush_hour_length",
+                                         dist.Exponential(1.0/7200))
     pm_rush_hour_end = pm_rush_hour_start + pm_rush_hour_length
     pm_rush_hour_onset = numpyro.sample("pm_rush_hour_onset",
-                                             dist.HalfNormal(1.0/2e3))
+                                             dist.Exponential(1.0/2e3))
     pm_rush_hour_fade = numpyro.sample("pm_rush_hour_fade",
-                                             dist.HalfNormal(1.0/2e3))
+                                             dist.Exponential(1.0/2e3))
     am_rush = (1 / (1 + jnp.exp(-am_rush_hour_onset * (departure -
                                                          am_rush_hour_start)))
             / (1 + jnp.exp(-am_rush_hour_fade * (am_rush_hour_end
@@ -46,8 +49,10 @@ def model(station, departure, duration=None):
                                                      pm_rush_hour_start)))
              / (1 + jnp.exp(-pm_rush_hour_fade * (pm_rush_hour_end
                                                   - departure))))
-    am_rush_penalty = numpyro.sample("am_rush_penalty", dist.HalfNormal(7200))
-    pm_rush_penalty = numpyro.sample("pm_rush_penalty", dist.HalfNormal(7200))
+    am_rush_penalty = numpyro.sample("am_rush_penalty",
+                                     dist.Exponential(1.0/7200))
+    pm_rush_penalty = numpyro.sample("pm_rush_penalty",
+                                     dist.Exponential(1.0/7200))
     sigma = numpyro.sample("sigma", dist.Exponential(1/1800.))
 
     n_stations = 2
@@ -55,8 +60,7 @@ def model(station, departure, duration=None):
         hwy_base = numpyro.sample(
                 "hwy_base",
                 dist.Normal(region_base, hwy_sigma))
-    mu = (region_base
-          + hwy_base[station]
+    mu = ( hwy_base[station]
           + am_rush * am_rush_penalty
           + pm_rush * pm_rush_penalty)
     numpyro.sample("obs", dist.Normal(mu, sigma), obs=duration)
