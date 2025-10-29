@@ -13,6 +13,7 @@ let
   myRStudio = pkgs.rstudioWrapper.override { packages = rPacks; };
   myPy = pkgs.python312.withPackages (pykgs: with pykgs; [
     numpyro
+    pyro-ppl
     pandas
     seaborn
     matplotlib
