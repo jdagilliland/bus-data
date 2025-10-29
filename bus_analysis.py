@@ -3,7 +3,7 @@ import pandas as pd
 import seaborn as sns
 from jax import random, vmap
 import jax.numpy as jnp
-from jax.scipy.special import logsumexp
+from jax.scipy.special import logsumexp, expit
 import numpyro
 from numpyro import handlers
 from numpyro.diagnostics import hpdi
@@ -41,14 +41,10 @@ def model(station, departure, duration=None):
                                              dist.Exponential(1.0/2e3))
     am_rush_hour_end = am_rush_hour_start + am_rush_hour_length
     pm_rush_hour_end = pm_rush_hour_start + pm_rush_hour_length
-    am_rush = (1 / (1 + jnp.exp(-am_rush_hour_onset * (departure -
-                                                         am_rush_hour_start)))
-            / (1 + jnp.exp(-am_rush_hour_fade * (am_rush_hour_end
-                                                      - departure))))
-    pm_rush = (1 / (1 + jnp.exp(-pm_rush_hour_onset * (departure -
-                                                     pm_rush_hour_start)))
-             / (1 + jnp.exp(-pm_rush_hour_fade * (pm_rush_hour_end
-                                                  - departure))))
+    am_rush = (expit(am_rush_hour_onset * (departure - am_rush_hour_start)) *
+               expit(-am_rush_hour_fade * (departure - am_rush_hour_end)))
+    pm_rush = (expit(pm_rush_hour_onset * (departure - pm_rush_hour_start)) *
+               expit(-pm_rush_hour_fade * (departure - pm_rush_hour_end)))
     am_rush_penalty = numpyro.sample("am_rush_penalty",
                                      dist.Exponential(1.0/7200))
     pm_rush_penalty = numpyro.sample("pm_rush_penalty",
