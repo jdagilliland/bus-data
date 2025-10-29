@@ -27,7 +27,6 @@ def model(station, departure, duration=None):
     am_rush_hour_start = numpyro.sample("am_rush_hour_start", dist.Normal(17e3, 5e3))
     am_rush_hour_length = numpyro.sample("am_rush_hour_length",
                                          dist.Exponential(1.0/7200))
-    am_rush_hour_end = am_rush_hour_start + am_rush_hour_length
     am_rush_hour_onset = numpyro.sample("am_rush_hour_onset",
                                              dist.Exponential(1.0/2e3))
     am_rush_hour_fade = numpyro.sample("am_rush_hour_fade",
@@ -36,11 +35,12 @@ def model(station, departure, duration=None):
                                         dist.Uniform(60e3, 5e3))
     pm_rush_hour_length = numpyro.sample("pm_rush_hour_length",
                                          dist.Exponential(1.0/7200))
-    pm_rush_hour_end = pm_rush_hour_start + pm_rush_hour_length
     pm_rush_hour_onset = numpyro.sample("pm_rush_hour_onset",
                                              dist.Exponential(1.0/2e3))
     pm_rush_hour_fade = numpyro.sample("pm_rush_hour_fade",
                                              dist.Exponential(1.0/2e3))
+    am_rush_hour_end = am_rush_hour_start + am_rush_hour_length
+    pm_rush_hour_end = pm_rush_hour_start + pm_rush_hour_length
     am_rush = (1 / (1 + jnp.exp(-am_rush_hour_onset * (departure -
                                                          am_rush_hour_start)))
             / (1 + jnp.exp(-am_rush_hour_fade * (am_rush_hour_end
