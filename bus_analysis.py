@@ -65,6 +65,34 @@ def expit_model(station, departure, duration=None):
           + pm_rush * pm_rush_penalty)
     numpyro.sample("obs", dist.Normal(mu, sigma), obs=duration)
 
+# squared exponential kernel with diagonal noise term
+def sqexp_kernel(X, Z, var, length, noise, jitter=1.0e-6, include_noise=True):
+    deltaXsq = jnp.power((X[:, None] - Z) / length, 2.0)
+    k = var * jnp.exp(-0.5 * deltaXsq)
+    if include_noise:
+        k += (noise + jitter) * jnp.eye(X.shape[0])
+    return k
+
+def gp_model(station, departure, duration=None):
+    # set uninformative log-normal priors on our three kernel hyperparameters
+    var = numpyro.sample("kernel_var", dist.LogNormal(0.0, 10.0))
+    noise = numpyro.sample("kernel_noise", dist.LogNormal(0.0, 10.0))
+    length = numpyro.sample("kernel_length", dist.LogNormal(0.0, 10.0))
+
+    # compute kernel, but I don't like how this is making the kernel n x n
+    # while it could be k x k, where n is the number of bus rides and k is
+    # the number of distinct departure times.
+    k = sqexp_kernel(departure, departure, var, length, noise)
+
+    # n_departure = len(np.unique(departure))
+
+    # sample durations according to the standard gaussian process formula
+    numpyro.sample(
+        "obs",
+        dist.MultivariateNormal(loc=jnp.zeros(departure.shape[0]), covariance_matrix=k),
+        obs=duration,
+    )
+
 def fit_simple_model(rng_key_, buses_ix, duration):
 
     # Run NUTS.
@@ -95,6 +123,12 @@ def fit_rush_hour_model(bus_dset, rng_key_):
     )
     # mcmc.print_summary()
     # samples_1 = mcmc.get_samples()
+    return mcmc
+
+def fit_gp_model(rng_key, station, departure, duration):
+    kernel = NUTS(gp_model)
+    mcmc = MCMC(kernel, num_warmup=1000, num_samples=2000)
+    mcmc.run(rng_key, station, departure)
     return mcmc
 
 def summary_plots(rng_key, mcmc, bus_dset, buses_le):
@@ -141,6 +175,8 @@ def main():
     bus_dset["bus_label"] = bus_dset["departure"].str.cat(bus_dset["station"], sep="_")
     buses_le = LabelEncoder()
     buses_ix = buses_le.fit_transform(bus_dset['bus_label'])
+    stations_le = LabelEncoder()
+    stations_ix = stations_le.fit_transform(bus_dset['bus_label'])
      # Start from this source of randomness. We will split keys for subsequent operations.
     rng_key = random.PRNGKey(0)
 
@@ -151,16 +187,20 @@ def main():
             bus_dset.duration.values,
             )
 
+    rng_key, rng_key_ = random.split(rng_key)
+    summary_plots(rng_key_, mcmc_simple, bus_dset, buses_le)
+
     # rng_key, rng_key_ = random.split(rng_key)
     # mcmc_rush_hour = fit_rush_hour_model(bus_dset, rng_key_)
 
     rng_key, rng_key_ = random.split(rng_key)
-    summary_plots(rng_key_, mcmc_simple, bus_dset, buses_le)
+    mcmc_gp = fit_gp_model(rng_key_, stations_ix, bus_dset["time.departure"].values, bus_dset.duration.values)
 
     return (
             mcmc_simple,
             # mcmc_rush_hour,
+            mcmc_gp,
             )
 
 if __name__ == "__main__":
-    (mcmc,) = main()
+    (mcmc_simple, mcmc_gp, ) = main()
