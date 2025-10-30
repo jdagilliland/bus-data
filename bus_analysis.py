@@ -1,4 +1,5 @@
 import time
+import argparse
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -64,10 +65,7 @@ def expit_model(station, departure, duration=None):
           + pm_rush * pm_rush_penalty)
     numpyro.sample("obs", dist.Normal(mu, sigma), obs=duration)
 
-def fit_simple_model(bus_dset, rng_key_):
-    bus_labels = bus_dset["departure"].str.cat(bus_dset["station"], sep="_")
-    buses_le = LabelEncoder()
-    buses_ix = buses_le.fit_transform(bus_labels)
+def fit_simple_model(rng_key_, buses_ix, duration):
 
     # Run NUTS.
     kernel = NUTS(simple_model)
@@ -76,10 +74,8 @@ def fit_simple_model(bus_dset, rng_key_):
     mcmc.run(
         rng_key_,
         bus=buses_ix,
-        duration=bus_dset.duration.values,
+        duration=duration,
     )
-    # mcmc.print_summary()
-    # samples_1 = mcmc.get_samples()
     return mcmc
 
 def fit_rush_hour_model(bus_dset, rng_key_):
@@ -100,30 +96,35 @@ def fit_rush_hour_model(bus_dset, rng_key_):
     # mcmc.print_summary()
     # samples_1 = mcmc.get_samples()
     return mcmc
-    
-def summary_plots(bus_dset, mcmc, buses_le):
-    ax = sns.scatterplot(bus_dset, x="time.departure", y="duration")
-    ax.get_figure().savefig("raw_durations.png")
+
+def summary_plots(rng_key, mcmc, bus_dset, buses_le):
+    fig, ax = plt.subplots(figsize=(12, 12,))
+    sns.scatterplot(bus_dset, x="time.departure", y="duration",
+                    hue="station", ax=ax)
+    fig.savefig("raw_durations.png")
     data = az.from_numpyro(mcmc)
-    az.plot_trace(data, figsize=(15, 25))
-    ax.get_figure().savefig("posterior_samples.png")
+    az.plot_trace(data)
+    plt.savefig("posterior_samples.png")
+    pred = Predictive(simple_model, posterior_samples=mcmc.get_samples())
     duration_pred_0900_nashua = pred(rng_key, buses_le.transform(np.array(["09:00_nashua"])))["obs"]
-    ax = az.plot_dist(duration_pred_0900_nashua)
-    ax.get_figure().savefig("9am_nashua_duration_prediction.png")
-    ax = az.plot_ecdf(np.asarray(duration_pred_0900_nashua)).copy()
-    ax.get_figure().savefig("9am_nashua_duration_cdf.png")
-    # Chance of a trip on the 0900 Nashua taking less than 80 minutes
-    np.mean(duration_pred_0900_nashua < 80)
+    fig, ax = plt.subplots(figsize=(12, 12,))
+    az.plot_dist(duration_pred_0900_nashua, ax=ax)
+    fig.savefig("9am_nashua_duration_prediction.png")
+    fig, ax = plt.subplots(figsize=(12, 12,))
+    az.plot_ecdf(np.asarray(duration_pred_0900_nashua).copy(), ax=ax)
+    fig.savefig("9am_nashua_duration_cdf.png")
     # Plot hypothetical journeys
     duration_pred = pred(rng_key, buses_le.transform(buses_le.classes_))["obs"]
+    mean_pred = pd.DataFrame(duration_pred.mean(axis=0), index=buses_le.classes_)
     pred_df = pd.DataFrame(duration_pred.T, index=buses_le.classes_).melt(ignore_index=False, var_name="iteration", value_name="duration")
-    bus_table = bus_dset[['station', 'departure', 'time.departure']].drop_duplicates().sort_values(by="time.departure")
-    bus_table['bus_label'] = bus_table["departure"].str.cat(bus_table["station"], sep="_")
+    bus_table = bus_dset[['bus_label', 'station', 'departure', 'time.departure']].drop_duplicates().sort_values(by="time.departure")
     bus_table = bus_table.set_index("bus_label")
     pred_df = pred_df.join(bus_table).reset_index(names="bus_label")
-    ax = sns.violinplot(pred_df, x="bus_label", y="duration", hue="station", inner=None)
+    fig, ax = plt.subplots(figsize=(12, 12,))
+    sns.violinplot(pred_df, x="bus_label", y="duration", hue="station",
+                   inner=None, ax=ax)
     ax.tick_params(axis="x", rotation=90)
-    ax.get_figure().savefig("violins_hypothetical_journeys.png")
+    fig.savefig("violins_hypothetical_journeys.png")
     bus_summary = bus_dset.groupby("bus_label")["duration"].agg(["mean", "count"]).join(mean_pred.set_axis(["simulated"], axis=1))
     return bus_summary
 
@@ -133,19 +134,28 @@ def arrive_by(pred_df, arrival):
     pred_df["time.arrival"] = pred_df["time.departure"] + 60 * pred_df["duration"]
     pred_df["ontime"] = pred_df["time.arrival"] < time_arrival
     return pred_df.groupby("bus_label")["ontime"].mean()
-    
+
 def main():
     # Data setup
     bus_dset = pd.read_csv("bus-data.csv")
     bus_dset["bus_label"] = bus_dset["departure"].str.cat(bus_dset["station"], sep="_")
+    buses_le = LabelEncoder()
+    buses_ix = buses_le.fit_transform(bus_dset['bus_label'])
      # Start from this source of randomness. We will split keys for subsequent operations.
     rng_key = random.PRNGKey(0)
 
     rng_key, rng_key_ = random.split(rng_key)
-    mcmc_simple = fit_simple_model(bus_dset, rng_key_)
+    mcmc_simple = fit_simple_model(
+            rng_key_,
+            buses_ix,
+            bus_dset.duration.values,
+            )
 
     # rng_key, rng_key_ = random.split(rng_key)
     # mcmc_rush_hour = fit_rush_hour_model(bus_dset, rng_key_)
+
+    rng_key, rng_key_ = random.split(rng_key)
+    summary_plots(rng_key_, mcmc_simple, bus_dset, buses_le)
 
     return (
             mcmc_simple,
